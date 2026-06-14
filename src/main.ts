@@ -1,8 +1,9 @@
-import { Plugin } from 'obsidian';
+import { Plugin, MarkdownRenderChild } from 'obsidian';
 import { EditorState, Transaction, TransactionSpec, Text } from '@codemirror/state';
 
-const CHECKED = /^(\s*)- \[[xX]\] /;
-const ANY_CHECKBOX = /^(\s*)- \[[ xX]\] /;
+// Support -, *, and numbered list markers
+const CHECKED = /^(\s*)(?:[-*]|\d+\.)\s+\[[xX]\] /;
+const ANY_CHECKBOX = /^(\s*)(?:[-*]|\d+\.)\s+\[[ xX]\] /;
 
 interface CheckboxItem {
 	lines: string[];
@@ -16,6 +17,7 @@ function getIndent(text: string): number {
 
 export default class CheckboxReorderPlugin extends Plugin {
 	async onload() {
+		// Editor mode: transaction filter for atomic undo
 		this.registerEditorExtension(
 			EditorState.transactionFilter.of((tr: Transaction): TransactionSpec | readonly TransactionSpec[] => {
 				if (!tr.docChanged) return tr;
@@ -24,7 +26,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 				const newDoc = tr.newDoc;
 				let checkedLineNum: number | null = null;
 
-				// Find the line that was just checked
 				tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
 					if (checkedLineNum !== null) return;
 
@@ -41,16 +42,11 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 				if (checkedLineNum === null) return tr;
 
-				// Compute the reorder on newDoc (where toggle already happened)
 				const result = this.computeReorder(newDoc, checkedLineNum);
 				if (!result) return tr;
 
 				const { groupStart, groupEnd, finalText } = result;
 
-				// Since a checkbox toggle [ ] → [x] doesn't change document length,
-				// line positions in newDoc are the same as in startDoc.
-				// Replace the block in the original doc directly with final text
-				// (which includes both the toggle and the reorder).
 				const startDoc = tr.startState.doc;
 				const from = startDoc.line(groupStart).from;
 				const to = startDoc.line(groupEnd).to;
@@ -61,6 +57,11 @@ export default class CheckboxReorderPlugin extends Plugin {
 				};
 			})
 		);
+
+		// Reading mode: sort checked items to bottom via DOM manipulation
+		this.registerMarkdownPostProcessor((element, context) => {
+			context.addChild(new ReadingViewSorter(element));
+		});
 	}
 
 	private computeReorder(
@@ -72,12 +73,9 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 		const { groupStart, groupEnd } = this.findSiblingGroup(doc, lineNum, indent);
 
-		// Parse into items at this indent level (each with children)
 		const items = this.parseItems(doc, groupStart, groupEnd, indent);
 
-		// Find which item was checked
 		const checkedIdx = items.findIndex((item, idx) => {
-			// The item that contains lineNum
 			let lineCount = groupStart;
 			for (let i = 0; i < idx; i++) {
 				lineCount += items[i]!.lines.length;
@@ -86,7 +84,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 		});
 		if (checkedIdx === -1) return null;
 
-		// Find insert position: just before trailing checked items
 		let insertBeforeIdx = items.length;
 		for (let i = items.length - 1; i >= 0; i--) {
 			if (items[i]!.checked && i !== checkedIdx) {
@@ -98,7 +95,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 		if (checkedIdx >= insertBeforeIdx) return null;
 
-		// Reorder
 		const movedItem = items.splice(checkedIdx, 1)[0]!;
 		const adjustedInsert = insertBeforeIdx - 1;
 		items.splice(adjustedInsert, 0, movedItem);
@@ -163,11 +159,52 @@ export default class CheckboxReorderPlugin extends Plugin {
 				});
 				i = j;
 			} else {
-				// Shouldn't normally happen, but skip
 				i++;
 			}
 		}
 
 		return items;
+	}
+}
+
+// Reading/preview mode: uses MutationObserver to re-sort DOM when checkboxes are toggled
+class ReadingViewSorter extends MarkdownRenderChild {
+	private observer!: MutationObserver;
+
+	onload() {
+		this.observer = new MutationObserver(() => {
+			this.observer.disconnect();
+			this.sort();
+			this.startObserving();
+		});
+		this.sort();
+		this.startObserving();
+	}
+
+	onunload() {
+		this.observer.disconnect();
+	}
+
+	private startObserving() {
+		this.observer.observe(this.containerEl, {
+			attributes: true,
+			attributeFilter: ['class'],
+			subtree: true,
+		});
+	}
+
+	private sort() {
+		this.containerEl.querySelectorAll<HTMLElement>('ul.contains-task-list').forEach(list => {
+			const items = Array.from(list.children) as HTMLElement[];
+			const unchecked = items.filter(li =>
+				li.classList.contains('task-list-item') && !li.classList.contains('is-checked')
+			);
+			const checked = items.filter(li =>
+				li.classList.contains('task-list-item') && li.classList.contains('is-checked')
+			);
+
+			if (checked.length === 0 || unchecked.length === 0) return;
+			for (const li of [...unchecked, ...checked]) list.appendChild(li);
+		});
 	}
 }
