@@ -1,6 +1,6 @@
-# Checkbox Reorder
+# Auto Sort Checked Items
 
-An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' checkbox behavior: when you check off a to-do item, it automatically moves to the bottom of the list so your focus stays on what's left to do.
+An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' "Automatically sort checked items" behavior: when you check off a to-do item, it automatically moves to the bottom of the list so your focus stays on what's left to do.
 
 ## Features
 

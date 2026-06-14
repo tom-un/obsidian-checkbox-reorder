@@ -1,9 +1,9 @@
 {
-	"id": "completed-task-reorder",
-	"name": "Completed Task Reorder",
+	"id": "auto-sort-checked-items",
+	"name": "Auto Sort Checked Items",
 	"version": "1.0.0",
 	"minAppVersion": "1.0.0",
-	"description": "Automatically moves checked items to the bottom of a checkbox list.",
+	"description": "Automatically move checklist items to the bottom of the list as they are checked.",
 	"author": "Tom",
 	"isDesktopOnly": false
 }
