@@ -4,6 +4,6 @@
 	"version": "1.0.0",
 	"minAppVersion": "1.0.0",
 	"description": "Automatically move checklist items to the bottom of the list as they are checked.",
-	"author": "Tom",
+	"author": "tom-un",
 	"isDesktopOnly": false
 }
