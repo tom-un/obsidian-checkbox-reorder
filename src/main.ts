@@ -108,35 +108,68 @@ export default class CheckboxReorderPlugin extends Plugin {
 						const destCoords = view.coordsAtPos(destLine.from);
 						if (!destCoords) return;
 
-						// Height spans multiple lines if the item has children
-						const lastLineNum = Math.min(destLineNumber + linesMoved - 1, view.state.doc.lines);
-						const lastLine = view.state.doc.line(lastLineNum);
-						const lastCoords = view.coordsAtPos(lastLine.from);
-						if (!lastCoords) return;
+						// Find the actual line DOM elements and get their bounding rects
+						const lineEls: HTMLElement[] = [];
+						for (let i = 0; i < linesMoved; i++) {
+							const lineNum = destLineNumber + i;
+							if (lineNum > view.state.doc.lines) break;
+							const line = view.state.doc.line(lineNum);
+							const domInfo = view.domAtPos(line.from);
+							let lineEl: HTMLElement | null = domInfo.node instanceof HTMLElement
+								? domInfo.node
+								: domInfo.node.parentElement;
+							while (lineEl && !lineEl.classList.contains('cm-line')) {
+								lineEl = lineEl.parentElement;
+							}
+							if (lineEl) lineEls.push(lineEl);
+						}
 
-						const totalHeight = lastCoords.bottom - destCoords.top;
-						const contentRect = view.contentDOM.getBoundingClientRect();
+						if (lineEls.length === 0) return;
 
+						// Use the first line element's actual rect as the reference position
+						const firstRect = lineEls[0]!.getBoundingClientRect();
+						// The vertical distance to travel (dest - source in coordsAtPos space)
+						const deltaY = destCoords.top - srcCoords.top;
+
+						// Ghost starts at the element's current position minus the delta
+						// (element is already at destination, so subtract delta to get source position)
+						const startY = firstRect.top - deltaY;
+						const destY = firstRect.top;
+
+						// Create ghost container positioned at the source's old location
 						const ghost = document.createElement('div');
 						ghost.style.cssText = `
 							position: fixed;
-							left: ${contentRect.left}px;
-							width: ${contentRect.width}px;
-							top: ${srcCoords.top}px;
-							height: ${totalHeight}px;
-							background: var(--text-accent);
-							opacity: 0.18;
-							border-radius: 4px;
+							top: ${startY}px;
+							left: ${firstRect.left}px;
 							pointer-events: none;
 							z-index: 1000;
+							opacity: 0.5;
 							transition: top 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 150ms ease-out 200ms;
 						`;
+
+						// Clone each line, preserving its horizontal offset relative to the first
+						for (const el of lineEls) {
+							const rect = el.getBoundingClientRect();
+							const clone = el.cloneNode(true) as HTMLElement;
+							// Preserve indentation by keeping the offset from the first line's left
+							const offsetX = rect.left - firstRect.left;
+							clone.style.cssText = `
+								position: relative;
+								left: ${offsetX}px;
+								width: ${rect.width}px;
+								height: ${rect.height}px;
+								margin: 0;
+								padding: ${getComputedStyle(el).padding};
+							`;
+							ghost.appendChild(clone);
+						}
 
 						document.body.appendChild(ghost);
 
 						// Force reflow then animate to destination
 						ghost.offsetHeight;
-						ghost.style.top = `${destCoords.top}px`;
+						ghost.style.top = `${destY}px`;
 						ghost.style.opacity = '0';
 
 						setTimeout(() => ghost.remove(), 400);
