@@ -1,5 +1,5 @@
 import { Plugin, MarkdownRenderChild } from 'obsidian';
-import { EditorState, Transaction, TransactionSpec, Text, StateEffect } from '@codemirror/state';
+import { EditorState, Transaction, TransactionSpec, Text, StateEffect, EditorSelection } from '@codemirror/state';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 
 // Support -, *, and numbered list markers
@@ -71,8 +71,18 @@ export default class CheckboxReorderPlugin extends Plugin {
 				// where the source item USED to be (items above didn't move)
 				const sourceLineInNewDoc = groupStart + result.sourceLineOffset;
 
+				// Compute cursor position within finalText at the line that now
+				// occupies the clicked row's position (to prevent scroll jump)
+				let cursorOffset = 0;
+				const lines = finalText.split('\n');
+				const targetLineIdx = sourceLineInNewDoc - groupStart;
+				for (let i = 0; i < targetLineIdx && i < lines.length; i++) {
+					cursorOffset += lines[i]!.length + 1;
+				}
+
 				return {
 					changes: { from, to, insert: finalText },
+					selection: EditorSelection.cursor(from + cursorOffset),
 					annotations: Transaction.userEvent.of('checkbox-reorder'),
 					effects: animationEffect.of({
 						destLineNumber: destLineInDoc,
@@ -83,10 +93,39 @@ export default class CheckboxReorderPlugin extends Plugin {
 			}),
 			// ViewPlugin to perform the animation after DOM update
 			ViewPlugin.fromClass(class {
+				suppressScroll: boolean = false;
+				savedScrollTop: number = 0;
+
+				constructor(private view: EditorView) {
+					this.onScroll = this.onScroll.bind(this);
+					this.view.scrollDOM.addEventListener('scroll', this.onScroll);
+				}
+
+				destroy() {
+					this.view.scrollDOM.removeEventListener('scroll', this.onScroll);
+				}
+
+				onScroll() {
+					if (this.suppressScroll) {
+						this.view.scrollDOM.scrollTop = this.savedScrollTop;
+						this.suppressScroll = false;
+					}
+				}
+
 				update(update: ViewUpdate) {
 					for (const tr of update.transactions) {
 						for (const effect of tr.effects) {
 							if (effect.is(animationEffect)) {
+								// Save scroll and suppress any upcoming scroll event
+								this.savedScrollTop = this.view.scrollDOM.scrollTop;
+								this.suppressScroll = true;
+								// Also force restore after a frame in case no scroll event fires
+								requestAnimationFrame(() => {
+									if (this.suppressScroll) {
+										this.view.scrollDOM.scrollTop = this.savedScrollTop;
+										this.suppressScroll = false;
+									}
+								});
 								this.animate(update.view, effect.value);
 							}
 						}
@@ -145,7 +184,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 							pointer-events: none;
 							z-index: 1000;
 							opacity: 0.5;
-							transition: top 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 150ms ease-out 200ms;
+							transition: top 500ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 200ms ease-out 400ms;
 						`;
 
 						// Clone each line, preserving its horizontal offset relative to the first
@@ -172,7 +211,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 						ghost.style.top = `${destY}px`;
 						ghost.style.opacity = '0';
 
-						setTimeout(() => ghost.remove(), 400);
+						setTimeout(() => ghost.remove(), 700);
 					});
 				}
 			}),
