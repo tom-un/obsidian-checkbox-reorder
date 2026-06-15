@@ -1,5 +1,6 @@
 import { Plugin, MarkdownRenderChild } from 'obsidian';
-import { EditorState, Transaction, TransactionSpec, Text } from '@codemirror/state';
+import { EditorState, Transaction, TransactionSpec, Text, StateEffect } from '@codemirror/state';
+import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 
 // Support -, *, and numbered list markers
 const CHECKED = /^(\s*)(?:[-*]|\d+\.)\s+\[[xX]\] /;
@@ -10,6 +11,15 @@ interface CheckboxItem {
 	checked: boolean;
 }
 
+// Carries animation metadata through the transaction
+interface AnimationInfo {
+	destLineNumber: number;   // 1-based line in new doc where item landed
+	sourceLineNumber: number; // 1-based line in new doc that NOW occupies source's old position
+	linesMoved: number;       // how many lines the item spans
+}
+
+const animationEffect = StateEffect.define<AnimationInfo>();
+
 function getIndent(text: string): number {
 	const match = text.match(/^(\s*)/);
 	return match ? match[1]!.length : 0;
@@ -18,7 +28,7 @@ function getIndent(text: string): number {
 export default class CheckboxReorderPlugin extends Plugin {
 	async onload() {
 		// Editor mode: transaction filter for atomic undo
-		this.registerEditorExtension(
+		this.registerEditorExtension([
 			EditorState.transactionFilter.of((tr: Transaction): TransactionSpec | readonly TransactionSpec[] => {
 				if (!tr.docChanged) return tr;
 				if (tr.annotation(Transaction.userEvent) === 'checkbox-reorder') return tr;
@@ -45,18 +55,95 @@ export default class CheckboxReorderPlugin extends Plugin {
 				const result = this.computeReorder(newDoc, checkedLineNum);
 				if (!result) return tr;
 
-				const { groupStart, groupEnd, finalText } = result;
+				const { groupStart, groupEnd, finalText, sourceIdx, destIdx, movedLineCount } = result;
 
 				const startDoc = tr.startState.doc;
 				const from = startDoc.line(groupStart).from;
 				const to = startDoc.line(groupEnd).to;
 
+				// Calculate which line the moved item lands on in the final doc
+				let destLineInDoc = groupStart;
+				for (let i = 0; i < destIdx; i++) {
+					destLineInDoc += result.itemLineCounts[i]!;
+				}
+
+				// In the new doc, the line at sourceLineOffset now occupies
+				// where the source item USED to be (items above didn't move)
+				const sourceLineInNewDoc = groupStart + result.sourceLineOffset;
+
 				return {
 					changes: { from, to, insert: finalText },
 					annotations: Transaction.userEvent.of('checkbox-reorder'),
+					effects: animationEffect.of({
+						destLineNumber: destLineInDoc,
+						sourceLineNumber: sourceLineInNewDoc,
+						linesMoved: movedLineCount,
+					}),
 				};
-			})
-		);
+			}),
+			// ViewPlugin to perform the animation after DOM update
+			ViewPlugin.fromClass(class {
+				update(update: ViewUpdate) {
+					for (const tr of update.transactions) {
+						for (const effect of tr.effects) {
+							if (effect.is(animationEffect)) {
+								this.animate(update.view, effect.value);
+							}
+						}
+					}
+				}
+
+				animate(view: EditorView, info: AnimationInfo) {
+					requestAnimationFrame(() => {
+						const { destLineNumber, sourceLineNumber, linesMoved } = info;
+						if (destLineNumber === sourceLineNumber) return;
+
+						// Source's old position = where sourceLineNumber now sits in the new doc
+						const srcLine = view.state.doc.line(sourceLineNumber);
+						const srcCoords = view.coordsAtPos(srcLine.from);
+						if (!srcCoords) return;
+
+						// Destination position
+						const destLine = view.state.doc.line(destLineNumber);
+						const destCoords = view.coordsAtPos(destLine.from);
+						if (!destCoords) return;
+
+						// Height spans multiple lines if the item has children
+						const lastLineNum = Math.min(destLineNumber + linesMoved - 1, view.state.doc.lines);
+						const lastLine = view.state.doc.line(lastLineNum);
+						const lastCoords = view.coordsAtPos(lastLine.from);
+						if (!lastCoords) return;
+
+						const totalHeight = lastCoords.bottom - destCoords.top;
+						const contentRect = view.contentDOM.getBoundingClientRect();
+
+						const ghost = document.createElement('div');
+						ghost.style.cssText = `
+							position: fixed;
+							left: ${contentRect.left}px;
+							width: ${contentRect.width}px;
+							top: ${srcCoords.top}px;
+							height: ${totalHeight}px;
+							background: var(--text-accent);
+							opacity: 0.18;
+							border-radius: 4px;
+							pointer-events: none;
+							z-index: 1000;
+							transition: top 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 150ms ease-out 200ms;
+						`;
+
+						document.body.appendChild(ghost);
+
+						// Force reflow then animate to destination
+						ghost.offsetHeight;
+						ghost.style.top = `${destCoords.top}px`;
+						ghost.style.opacity = '0';
+
+						setTimeout(() => ghost.remove(), 400);
+					});
+				}
+			}),
+		]);
 
 		// Reading mode: sort checked items to bottom via DOM manipulation
 		this.registerMarkdownPostProcessor((element, context) => {
@@ -67,7 +154,16 @@ export default class CheckboxReorderPlugin extends Plugin {
 	private computeReorder(
 		doc: Text,
 		lineNum: number
-	): { groupStart: number; groupEnd: number; finalText: string } | null {
+	): {
+		groupStart: number;
+		groupEnd: number;
+		finalText: string;
+		sourceIdx: number;
+		destIdx: number;
+		movedLineCount: number;
+		itemLineCounts: number[];
+		sourceLineOffset: number;
+	} | null {
 		const lineText = doc.line(lineNum).text;
 		const indent = getIndent(lineText);
 
@@ -95,13 +191,29 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 		if (checkedIdx >= insertBeforeIdx) return null;
 
+		// Calculate source line offset before mutation
+		let sourceLineOffset = 0;
+		for (let i = 0; i < checkedIdx; i++) {
+			sourceLineOffset += items[i]!.lines.length;
+		}
+
 		const movedItem = items.splice(checkedIdx, 1)[0]!;
 		const adjustedInsert = insertBeforeIdx - 1;
 		items.splice(adjustedInsert, 0, movedItem);
 
 		const finalText = items.flatMap(item => item.lines).join('\n');
+		const itemLineCounts = items.map(item => item.lines.length);
 
-		return { groupStart, groupEnd, finalText };
+		return {
+			groupStart,
+			groupEnd,
+			finalText,
+			sourceIdx: checkedIdx,
+			destIdx: adjustedInsert,
+			movedLineCount: movedItem.lines.length,
+			itemLineCounts,
+			sourceLineOffset,
+		};
 	}
 
 	private findSiblingGroup(
