@@ -6,6 +6,7 @@ An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' "Automati
 
 - ✅ **Auto-reorder** — Checked items slide to the bottom of their checkbox group
 - 🪆 **Nesting-aware** — Items with sub-items move as a group, and indented items reorder within their own level
+- ✨ **Smooth animation** — A ghost of the checked row visually slides to its new position
 - ↩️ **Clean undo** — Cmd/Ctrl+Z undoes both the check and the move in one step
 
 ## Demo
