@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-checkbox-reorder",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Obsidian plugin that moves checked items to the bottom of a checkbox list.",
 	"main": "main.js",
 	"type": "module",
