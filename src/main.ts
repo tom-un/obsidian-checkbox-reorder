@@ -55,7 +55,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 				const result = this.computeReorder(newDoc, checkedLineNum);
 				if (!result) return tr;
 
-				const { groupStart, groupEnd, finalText, sourceIdx, destIdx, movedLineCount } = result;
+				const { groupStart, groupEnd, finalText, destIdx, movedLineCount } = result;
 
 				const startDoc = tr.startState.doc;
 				const from = startDoc.line(groupStart).from;
@@ -97,7 +97,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 				savedScrollTop: number = 0;
 
 				constructor(private view: EditorView) {
-					this.onScroll = this.onScroll.bind(this);
 					this.view.scrollDOM.addEventListener('scroll', this.onScroll);
 				}
 
@@ -105,12 +104,12 @@ export default class CheckboxReorderPlugin extends Plugin {
 					this.view.scrollDOM.removeEventListener('scroll', this.onScroll);
 				}
 
-				onScroll() {
+				onScroll = () => {
 					if (this.suppressScroll) {
 						this.view.scrollDOM.scrollTop = this.savedScrollTop;
 						this.suppressScroll = false;
 					}
-				}
+				};
 
 				update(update: ViewUpdate) {
 					for (const tr of update.transactions) {
@@ -120,7 +119,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 								this.savedScrollTop = this.view.scrollDOM.scrollTop;
 								this.suppressScroll = true;
 								// Also force restore after a frame in case no scroll event fires
-								requestAnimationFrame(() => {
+								window.requestAnimationFrame(() => {
 									if (this.suppressScroll) {
 										this.view.scrollDOM.scrollTop = this.savedScrollTop;
 										this.suppressScroll = false;
@@ -132,8 +131,8 @@ export default class CheckboxReorderPlugin extends Plugin {
 					}
 				}
 
-				animate(view: EditorView, info: AnimationInfo) {
-					requestAnimationFrame(() => {
+				animate = (view: EditorView, info: AnimationInfo) => {
+					window.requestAnimationFrame(() => {
 						const { destLineNumber, sourceLineNumber, linesMoved } = info;
 						if (destLineNumber === sourceLineNumber) return;
 
@@ -154,8 +153,8 @@ export default class CheckboxReorderPlugin extends Plugin {
 							if (lineNum > view.state.doc.lines) break;
 							const line = view.state.doc.line(lineNum);
 							const domInfo = view.domAtPos(line.from);
-							let lineEl: HTMLElement | null = domInfo.node instanceof HTMLElement
-								? domInfo.node
+							let lineEl: HTMLElement | null = domInfo.node.nodeType === 1
+								? (domInfo.node as HTMLElement)
 								: domInfo.node.parentElement;
 							while (lineEl && !lineEl.classList.contains('cm-line')) {
 								lineEl = lineEl.parentElement;
@@ -175,45 +174,45 @@ export default class CheckboxReorderPlugin extends Plugin {
 						const startY = firstRect.top - deltaY;
 						const destY = firstRect.top;
 
+						const doc = view.dom.ownerDocument;
+
 						// Create ghost container positioned at the source's old location
-						const ghost = document.createElement('div');
-						ghost.style.cssText = `
-							position: fixed;
-							top: ${startY}px;
-							left: ${firstRect.left}px;
-							pointer-events: none;
-							z-index: 1000;
-							opacity: 0.5;
-							transition: top 500ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 200ms ease-out 400ms;
-						`;
+						const ghost = doc.createElement('div');
+						ghost.setCssStyles({
+							position: 'fixed',
+							top: `${startY}px`,
+							left: `${firstRect.left}px`,
+							pointerEvents: 'none',
+							zIndex: '1000',
+							opacity: '0.5',
+							transition: 'top 500ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 200ms ease-out 400ms',
+						});
 
 						// Clone each line, preserving its horizontal offset relative to the first
 						for (const el of lineEls) {
 							const rect = el.getBoundingClientRect();
 							const clone = el.cloneNode(true) as HTMLElement;
-							// Preserve indentation by keeping the offset from the first line's left
 							const offsetX = rect.left - firstRect.left;
-							clone.style.cssText = `
-								position: relative;
-								left: ${offsetX}px;
-								width: ${rect.width}px;
-								height: ${rect.height}px;
-								margin: 0;
-								padding: ${getComputedStyle(el).padding};
-							`;
+							clone.setCssStyles({
+								position: 'relative',
+								left: `${offsetX}px`,
+								width: `${rect.width}px`,
+								height: `${rect.height}px`,
+								margin: '0',
+								padding: getComputedStyle(el).padding,
+							});
 							ghost.appendChild(clone);
 						}
 
-						document.body.appendChild(ghost);
+						doc.body.appendChild(ghost);
 
 						// Force reflow then animate to destination
-						ghost.offsetHeight;
-						ghost.style.top = `${destY}px`;
-						ghost.style.opacity = '0';
+						void ghost.offsetHeight;
+						ghost.setCssStyles({ top: `${destY}px`, opacity: '0' });
 
-						setTimeout(() => ghost.remove(), 700);
+						window.setTimeout(() => ghost.remove(), 700);
 					});
-				}
+				};
 			}),
 		]);
 
@@ -230,7 +229,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 		groupStart: number;
 		groupEnd: number;
 		finalText: string;
-		sourceIdx: number;
 		destIdx: number;
 		movedLineCount: number;
 		itemLineCounts: number[];
@@ -280,7 +278,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 			groupStart,
 			groupEnd,
 			finalText,
-			sourceIdx: checkedIdx,
 			destIdx: adjustedInsert,
 			movedLineCount: movedItem.lines.length,
 			itemLineCounts,

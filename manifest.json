@@ -1,7 +1,7 @@
 {
 	"id": "auto-sort-checked-items",
 	"name": "Auto Sort Checked Items",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"minAppVersion": "1.0.0",
 	"description": "Automatically move checklist items to the bottom of the list as they are checked.",
 	"author": "tom-un",
