@@ -10,41 +10,9 @@ An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' "Automati
 
 ## Demo
 
-Before checking "Buy groceries":
+![Auto Sort Checked Items demo](example.gif)
 
-```markdown
-- [ ] Buy groceries
-- [ ] Call dentist
-- [ ] Finish report
-- [x] Send email
-```
-
-After:
-
-```markdown
-- [ ] Call dentist
-- [ ] Finish report
-- [x] Buy groceries
-- [x] Send email
-```
-
-Nested lists work too — checking a parent moves it along with all its children:
-
-```markdown
-- [ ] Project A
-  - [ ] Task 1
-  - [ ] Task 2
-- [ ] Project B
-```
-
-Check "Project A" →
-
-```markdown
-- [ ] Project B
-- [x] Project A
-  - [ ] Task 1
-  - [ ] Task 2
-```
+Checked items slide to the bottom with a smooth animation. Nested items move as a group.
 
 ## Installation
 
