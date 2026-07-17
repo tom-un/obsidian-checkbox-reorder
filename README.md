@@ -1,5 +1,7 @@
 # Auto Sort Checked Items
 
+![Auto Sort Checked Items demo](example.gif)
+
 An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' "Automatically sort checked items" behavior: when you check off a to-do item, it automatically moves to the bottom of the list so your focus stays on what's left to do.
 
 ## Features
@@ -8,12 +10,6 @@ An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' "Automati
 - 🪆 **Nesting-aware** — Items with sub-items move as a group, and indented items reorder within their own level
 - ✨ **Smooth animation** — A ghost of the checked row visually slides to its new position
 - ↩️ **Clean undo** — Cmd/Ctrl+Z undoes both the check and the move in one step
-
-## Demo
-
-![Auto Sort Checked Items demo](example.gif)
-
-Checked items slide to the bottom with a smooth animation. Nested items move as a group.
 
 ## Installation
 
