@@ -1,10 +1,16 @@
-import { Plugin, MarkdownRenderChild } from 'obsidian';
+import { Editor, Plugin, MarkdownRenderChild } from 'obsidian';
 import { EditorState, Transaction, TransactionSpec, Text, StateEffect, EditorSelection } from '@codemirror/state';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
+import {
+	ANY_CHECKBOX,
+	getIndent,
+	planCheckboxSubtreeMove,
+} from './move-subtree';
+import type { MoveDirection, MovePlan } from './move-subtree';
 
 // Support -, *, and numbered list markers
 const CHECKED = /^(\s*)(?:[-*]|\d+\.)\s+\[[xX]\] /;
-const ANY_CHECKBOX = /^(\s*)(?:[-*]|\d+\.)\s+\[[ xX]\] /;
+const MOVE_SUBTREE_EVENT = 'move-checkbox-subtree';
 
 interface CheckboxItem {
 	lines: string[];
@@ -20,18 +26,36 @@ interface AnimationInfo {
 
 const animationEffect = StateEffect.define<AnimationInfo>();
 
-function getIndent(text: string): number {
-	const match = text.match(/^(\s*)/);
-	return match ? match[1]!.length : 0;
-}
-
 export default class CheckboxReorderPlugin extends Plugin {
 	async onload() {
+		this.addCommand({
+			id: 'move-checkbox-item-up',
+			name: 'Move TODO item up with sub-items',
+			editorCheckCallback: (checking, editor) => {
+				const plan = this.getMovePlan(editor, 'up');
+				if (!plan) return false;
+				if (!checking) this.applyMovePlan(editor, plan);
+				return true;
+			},
+		});
+
+		this.addCommand({
+			id: 'move-checkbox-item-down',
+			name: 'Move TODO item down with sub-items',
+			editorCheckCallback: (checking, editor) => {
+				const plan = this.getMovePlan(editor, 'down');
+				if (!plan) return false;
+				if (!checking) this.applyMovePlan(editor, plan);
+				return true;
+			},
+		});
+
 		// Editor mode: transaction filter for atomic undo
 		this.registerEditorExtension([
 			EditorState.transactionFilter.of((tr: Transaction): TransactionSpec | readonly TransactionSpec[] => {
 				if (!tr.docChanged) return tr;
-				if (tr.annotation(Transaction.userEvent) === 'checkbox-reorder') return tr;
+				const userEvent = tr.annotation(Transaction.userEvent);
+				if (userEvent === 'checkbox-reorder' || userEvent === MOVE_SUBTREE_EVENT) return tr;
 
 				const newDoc = tr.newDoc;
 				let checkedLineNum: number | null = null;
@@ -220,6 +244,31 @@ export default class CheckboxReorderPlugin extends Plugin {
 		this.registerMarkdownPostProcessor((element, context) => {
 			context.addChild(new ReadingViewSorter(element));
 		});
+	}
+
+	private getMovePlan(this: void, editor: Editor, direction: MoveDirection): MovePlan | null {
+		const lines: string[] = [];
+		for (let line = 0; line < editor.lineCount(); line++) {
+			lines.push(editor.getLine(line));
+		}
+		return planCheckboxSubtreeMove(lines, editor.getCursor().line, direction);
+	}
+
+	private applyMovePlan(this: void, editor: Editor, plan: MovePlan) {
+		const cursor = editor.getCursor();
+		editor.transaction({
+			changes: [{
+				from: { line: plan.fromLine, ch: 0 },
+				to: { line: plan.toLine, ch: editor.getLine(plan.toLine).length },
+				text: plan.replacement,
+			}],
+			selection: {
+				from: {
+					line: plan.cursorLine,
+					ch: Math.min(cursor.ch, editor.getLine(cursor.line).length),
+				},
+			},
+		}, MOVE_SUBTREE_EVENT);
 	}
 
 	private computeReorder(
