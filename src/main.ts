@@ -143,6 +143,11 @@ export default class CheckboxReorderPlugin extends Plugin {
 				animate = (view: EditorView, info: AnimationInfo) => {
 					window.requestAnimationFrame(() => {
 						const { destLineNumber, sourceLineNumber, linesMoved } = info;
+						this.syncCheckboxes(
+							view,
+							Math.min(sourceLineNumber, destLineNumber),
+							Math.max(sourceLineNumber, destLineNumber + linesMoved - 1)
+						);
 						if (destLineNumber === sourceLineNumber) return;
 
 						// Source's old position = where sourceLineNumber now sits in the new doc
@@ -219,6 +224,26 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 						window.setTimeout(() => ghost.remove(), 700);
 					});
+				};
+
+				syncCheckboxes = (view: EditorView, startLine: number, endLine: number) => {
+					for (let lineNumber = startLine; lineNumber <= endLine; lineNumber++) {
+						if (lineNumber < 1 || lineNumber > view.state.doc.lines) continue;
+
+						const line = view.state.doc.line(lineNumber);
+						const domInfo = view.domAtPos(line.from);
+						let lineElement: HTMLElement | null = domInfo.node.nodeType === 1
+							? (domInfo.node as HTMLElement)
+							: domInfo.node.parentElement;
+						while (lineElement && !lineElement.classList.contains('cm-line')) {
+							lineElement = lineElement.parentElement;
+						}
+
+						const checkbox = lineElement?.querySelector<HTMLInputElement>('input[type="checkbox"]');
+						if (!checkbox) continue;
+						checkbox.checked = CHECKED_CHECKBOX.test(line.text);
+						checkbox.indeterminate = false;
+					}
 				};
 			}),
 		]);

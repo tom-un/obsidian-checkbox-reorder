@@ -109,6 +109,49 @@ describe('planCheckedItemReorder', () => {
 		]);
 	});
 
+	it('keeps a checked descendant with its parent when moving a sibling', () => {
+		const lines = [
+			'- [ ] Privacy/Security',
+			'  - [x] Enable the build pipeline',
+			'  - [ ] Figure out the security review process',
+			'  - [ ] Email privacy review',
+			'  - [ ] Review design',
+			'  - [ ] Privacy follow up',
+			'  - [ ] Clarify who is doing security',
+			'    - [ ] Watch security kickoff',
+			'    - [ ] Watch security sync',
+			'    - [x] M365 compliance onboarding',
+			'      - [x] Front line CELA',
+			'      - [x] Autopilot UX spec',
+			'  - [x] Rajesh',
+			'  - [x] RAI test tenant',
+			'- [ ] Next section',
+		];
+
+		const plan = planCheckedItemReorder(source(lines), 1);
+
+		expect(plan).not.toBeNull();
+		expect(applyPlan(lines, plan!)).toEqual([
+			'- [ ] Privacy/Security',
+			'  - [ ] Figure out the security review process',
+			'  - [ ] Email privacy review',
+			'  - [ ] Review design',
+			'  - [ ] Privacy follow up',
+			'  - [ ] Clarify who is doing security',
+			'    - [ ] Watch security kickoff',
+			'    - [ ] Watch security sync',
+			'    - [x] M365 compliance onboarding',
+			'      - [x] Front line CELA',
+			'      - [x] Autopilot UX spec',
+			'  - [x] Enable the build pipeline',
+			'  - [x] Rajesh',
+			'  - [x] RAI test tenant',
+			'- [ ] Next section',
+		]);
+		expect(plan!.destinationLine).toBe(11);
+		expect(plan!.sourceLineAfterMove).toBe(1);
+	});
+
 	it('supports star and numbered checkbox markers', () => {
 		const lines = [
 			'* [x] Star',
