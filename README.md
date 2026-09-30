@@ -2,13 +2,15 @@
 
 ![Auto Sort Checked Items demo](example.gif)
 
-An [Obsidian](https://obsidian.md) plugin that replicates Apple Notes' "Automatically sort checked items" behavior: when you check off a to-do item, it automatically moves to the bottom of the list so your focus stays on what's left to do.
+An [Obsidian](https://obsidian.md) plugin that keeps completed tasks out of the way and makes nested TODO lists easier to organize. Check an item to move it below the remaining work, or use hotkeys to move an entire TODO branch with all of its sub-items.
 
 ## Features
 
 - ✅ **Auto-reorder** — Checked items slide to the bottom of their checkbox group
 - 🪆 **Nesting-aware** — Items with sub-items move as a group, and indented items reorder within their own level
 - ↕️ **Move whole TODO branches** — Move an item up or down together with all of its indented sub-items
+- 📝 **Flexible list markers** — Works with `-`, `*`, and numbered checkbox lists
+- 👁️ **Reading View support** — Completed tasks remain sorted below open tasks outside the editor
 - ✨ **Smooth animation** — A ghost of the checked row visually slides to its new position
 - ↩️ **Clean undo** — Cmd/Ctrl+Z undoes both the check and the move in one step
 
@@ -19,7 +21,7 @@ Obsidian's built-in **Move line up** and **Move line down** commands only move o
 - **Auto Sort Checked Items: Move TODO item up with sub-items**
 - **Auto Sort Checked Items: Move TODO item down with sub-items**
 
-Assign hotkeys to these commands in **Settings → Hotkeys**. Put the cursor on a checkbox item and the command will swap that item, including every indented line beneath it, with the adjacent checkbox item at the same indentation level.
+Assign hotkeys to these commands in **Settings → Hotkeys**. They are unassigned by default. Put the cursor on a checkbox item and the command will swap that item, including every indented line beneath it, with the adjacent checkbox item at the same indentation level.
 
 ![Hotkey assignments for moving TODO items with their sub-items](hotkeys.png)
 
@@ -28,9 +30,9 @@ Assign hotkeys to these commands in **Settings → Hotkeys**. Put the cursor on 
 ### Manual
 
 1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/tom-un/obsidian-checkbox-reorder/releases)
-2. Create a folder called `checkbox-reorder` in your vault's `.obsidian/plugins/` directory
+2. Create a folder called `auto-sort-checked-items` in your vault's `.obsidian/plugins/` directory
 3. Place both files inside it
-4. In Obsidian, go to **Settings → Community Plugins** and enable "Checkbox Reorder"
+4. In Obsidian, go to **Settings → Community plugins** and enable **Auto Sort Checked Items**
 
 ### From source
 
@@ -48,7 +50,7 @@ Then copy the folder (or symlink it) into your vault's `.obsidian/plugins/` dire
 ```bash
 npm run dev    # Watch mode — rebuilds on file changes
 npm test       # Run unit tests
-npm run test:coverage # Run tests and enforce core coverage thresholds
+npm run test:coverage  # Run tests and enforce core coverage thresholds
 npm run build  # Production build
 ```
 

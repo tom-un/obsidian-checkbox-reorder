@@ -3,7 +3,7 @@
 	"name": "Auto Sort Checked Items",
 	"version": "1.0.3",
 	"minAppVersion": "1.0.0",
-	"description": "Automatically move checklist items to the bottom of the list as they are checked.",
+	"description": "Automatically sort checked items and move TODO branches with all nested sub-items.",
 	"author": "tom-un",
 	"isDesktopOnly": false
 }
