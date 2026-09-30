@@ -10,8 +10,7 @@ export interface MovePlan {
 }
 
 export function getIndent(text: string): number {
-	const match = text.match(/^(\s*)/);
-	return match ? match[1]!.length : 0;
+	return text.search(/\S|$/);
 }
 
 export function planCheckboxSubtreeMove(

@@ -48,8 +48,11 @@ Then copy the folder (or symlink it) into your vault's `.obsidian/plugins/` dire
 ```bash
 npm run dev    # Watch mode — rebuilds on file changes
 npm test       # Run unit tests
+npm run test:coverage # Run tests and enforce core coverage thresholds
 npm run build  # Production build
 ```
+
+Coverage is enforced at 100% for the deterministic sorting, subtree movement, reading-order, and animation-positioning modules. The Obsidian and CodeMirror integration shell still requires an in-app smoke test.
 
 ## License
 

@@ -3,6 +3,7 @@ main.js
 
 # Node
 node_modules/
+coverage/
 
 # IDE
 .idea/

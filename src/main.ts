@@ -1,21 +1,13 @@
 import { Editor, Plugin, MarkdownRenderChild } from 'obsidian';
-import { EditorState, Transaction, TransactionSpec, Text, StateEffect, EditorSelection } from '@codemirror/state';
+import { EditorState, Transaction, TransactionSpec, StateEffect, EditorSelection } from '@codemirror/state';
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
-import {
-	ANY_CHECKBOX,
-	getIndent,
-	planCheckboxSubtreeMove,
-} from './move-subtree';
+import { getGhostVerticalPositions } from './animation';
+import { planCheckboxSubtreeMove } from './move-subtree';
+import { getTaskItemSortOrder } from './reading-sort';
+import { CHECKED_CHECKBOX, planCheckedItemReorder } from './reorder';
 import type { MoveDirection, MovePlan } from './move-subtree';
 
-// Support -, *, and numbered list markers
-const CHECKED = /^(\s*)(?:[-*]|\d+\.)\s+\[[xX]\] /;
 const MOVE_SUBTREE_EVENT = 'move-checkbox-subtree';
-
-interface CheckboxItem {
-	lines: string[];
-	checked: boolean;
-}
 
 // Carries animation metadata through the transaction
 interface AnimationInfo {
@@ -67,7 +59,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 					const endLine = newDoc.lineAt(toB).number;
 
 					for (let num = startLine; num <= endLine; num++) {
-						if (CHECKED.test(newDoc.line(num).text)) {
+						if (CHECKED_CHECKBOX.test(newDoc.line(num).text)) {
 							checkedLineNum = num;
 							return;
 						}
@@ -76,30 +68,23 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 				if (checkedLineNum === null) return tr;
 
-				const result = this.computeReorder(newDoc, checkedLineNum);
+				const result = planCheckedItemReorder({
+					lineCount: newDoc.lines,
+					getLine: index => newDoc.line(index + 1).text,
+				}, checkedLineNum - 1);
 				if (!result) return tr;
 
-				const { groupStart, groupEnd, finalText, destIdx, movedLineCount } = result;
+				const { groupStart, groupEnd, finalText, movedLineCount } = result;
 
 				const startDoc = tr.startState.doc;
-				const from = startDoc.line(groupStart).from;
-				const to = startDoc.line(groupEnd).to;
-
-				// Calculate which line the moved item lands on in the final doc
-				let destLineInDoc = groupStart;
-				for (let i = 0; i < destIdx; i++) {
-					destLineInDoc += result.itemLineCounts[i]!;
-				}
-
-				// In the new doc, the line at sourceLineOffset now occupies
-				// where the source item USED to be (items above didn't move)
-				const sourceLineInNewDoc = groupStart + result.sourceLineOffset;
+				const from = startDoc.line(groupStart + 1).from;
+				const to = startDoc.line(groupEnd + 1).to;
 
 				// Compute cursor position within finalText at the line that now
 				// occupies the clicked row's position (to prevent scroll jump)
 				let cursorOffset = 0;
 				const lines = finalText.split('\n');
-				const targetLineIdx = sourceLineInNewDoc - groupStart;
+				const targetLineIdx = result.sourceLineAfterMove - groupStart;
 				for (let i = 0; i < targetLineIdx && i < lines.length; i++) {
 					cursorOffset += lines[i]!.length + 1;
 				}
@@ -109,8 +94,8 @@ export default class CheckboxReorderPlugin extends Plugin {
 					selection: EditorSelection.cursor(from + cursorOffset),
 					annotations: Transaction.userEvent.of('checkbox-reorder'),
 					effects: animationEffect.of({
-						destLineNumber: destLineInDoc,
-						sourceLineNumber: sourceLineInNewDoc,
+						destLineNumber: result.destinationLine + 1,
+						sourceLineNumber: result.sourceLineAfterMove + 1,
 						linesMoved: movedLineCount,
 					}),
 				};
@@ -190,13 +175,11 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 						// Use the first line element's actual rect as the reference position
 						const firstRect = lineEls[0]!.getBoundingClientRect();
-						// The vertical distance to travel (dest - source in coordsAtPos space)
-						const deltaY = destCoords.top - srcCoords.top;
-
-						// Ghost starts at the element's current position minus the delta
-						// (element is already at destination, so subtract delta to get source position)
-						const startY = firstRect.top - deltaY;
-						const destY = firstRect.top;
+						const { startY, destinationY } = getGhostVerticalPositions(
+							firstRect.top,
+							srcCoords.top,
+							destCoords.top
+						);
 
 						const doc = view.dom.ownerDocument;
 
@@ -232,7 +215,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 
 						// Force reflow then animate to destination
 						void ghost.offsetHeight;
-						ghost.setCssStyles({ top: `${destY}px`, opacity: '0' });
+						ghost.setCssStyles({ top: `${destinationY}px`, opacity: '0' });
 
 						window.setTimeout(() => ghost.remove(), 700);
 					});
@@ -270,131 +253,6 @@ export default class CheckboxReorderPlugin extends Plugin {
 			},
 		}, MOVE_SUBTREE_EVENT);
 	}
-
-	private computeReorder(
-		doc: Text,
-		lineNum: number
-	): {
-		groupStart: number;
-		groupEnd: number;
-		finalText: string;
-		destIdx: number;
-		movedLineCount: number;
-		itemLineCounts: number[];
-		sourceLineOffset: number;
-	} | null {
-		const lineText = doc.line(lineNum).text;
-		const indent = getIndent(lineText);
-
-		const { groupStart, groupEnd } = this.findSiblingGroup(doc, lineNum, indent);
-
-		const items = this.parseItems(doc, groupStart, groupEnd, indent);
-
-		const checkedIdx = items.findIndex((item, idx) => {
-			let lineCount = groupStart;
-			for (let i = 0; i < idx; i++) {
-				lineCount += items[i]!.lines.length;
-			}
-			return lineCount <= lineNum && lineNum < lineCount + item.lines.length;
-		});
-		if (checkedIdx === -1) return null;
-
-		let insertBeforeIdx = items.length;
-		for (let i = items.length - 1; i >= 0; i--) {
-			if (items[i]!.checked && i !== checkedIdx) {
-				insertBeforeIdx = i;
-			} else {
-				break;
-			}
-		}
-
-		if (checkedIdx >= insertBeforeIdx) return null;
-
-		// Calculate source line offset before mutation
-		let sourceLineOffset = 0;
-		for (let i = 0; i < checkedIdx; i++) {
-			sourceLineOffset += items[i]!.lines.length;
-		}
-
-		const movedItem = items.splice(checkedIdx, 1)[0]!;
-		const adjustedInsert = insertBeforeIdx - 1;
-		items.splice(adjustedInsert, 0, movedItem);
-
-		const finalText = items.flatMap(item => item.lines).join('\n');
-		const itemLineCounts = items.map(item => item.lines.length);
-
-		return {
-			groupStart,
-			groupEnd,
-			finalText,
-			destIdx: adjustedInsert,
-			movedLineCount: movedItem.lines.length,
-			itemLineCounts,
-			sourceLineOffset,
-		};
-	}
-
-	private findSiblingGroup(
-		doc: Text,
-		lineNum: number,
-		indent: number
-	): { groupStart: number; groupEnd: number } {
-		let groupStart = lineNum;
-		while (groupStart > 1) {
-			const prevText = doc.line(groupStart - 1).text;
-			const prevIndent = getIndent(prevText);
-			if (prevIndent < indent) break;
-			if (!ANY_CHECKBOX.test(prevText)) break;
-			groupStart--;
-		}
-
-		let groupEnd = lineNum;
-		while (groupEnd < doc.lines) {
-			const nextText = doc.line(groupEnd + 1).text;
-			const nextIndent = getIndent(nextText);
-			if (nextIndent < indent) break;
-			if (!ANY_CHECKBOX.test(nextText)) break;
-			groupEnd++;
-		}
-
-		return { groupStart, groupEnd };
-	}
-
-	private parseItems(
-		doc: Text,
-		groupStart: number,
-		groupEnd: number,
-		indent: number
-	): CheckboxItem[] {
-		const items: CheckboxItem[] = [];
-
-		let i = groupStart;
-		while (i <= groupEnd) {
-			const text = doc.line(i).text;
-			const lineIndent = getIndent(text);
-
-			if (lineIndent === indent && ANY_CHECKBOX.test(text)) {
-				const lines: string[] = [text];
-				let j = i + 1;
-				while (j <= groupEnd) {
-					const childText = doc.line(j).text;
-					if (getIndent(childText) <= indent) break;
-					lines.push(childText);
-					j++;
-				}
-
-				items.push({
-					lines,
-					checked: CHECKED.test(text),
-				});
-				i = j;
-			} else {
-				i++;
-			}
-		}
-
-		return items;
-	}
 }
 
 // Reading/preview mode: uses MutationObserver to re-sort DOM when checkboxes are toggled
@@ -426,15 +284,13 @@ class ReadingViewSorter extends MarkdownRenderChild {
 	private sort() {
 		this.containerEl.querySelectorAll<HTMLElement>('ul.contains-task-list').forEach(list => {
 			const items = Array.from(list.children) as HTMLElement[];
-			const unchecked = items.filter(li =>
-				li.classList.contains('task-list-item') && !li.classList.contains('is-checked')
-			);
-			const checked = items.filter(li =>
-				li.classList.contains('task-list-item') && li.classList.contains('is-checked')
-			);
+			const order = getTaskItemSortOrder(items.map(item => ({
+				isTask: item.classList.contains('task-list-item'),
+				isChecked: item.classList.contains('is-checked'),
+			})));
 
-			if (checked.length === 0 || unchecked.length === 0) return;
-			for (const li of [...unchecked, ...checked]) list.appendChild(li);
+			if (!order) return;
+			for (const index of order) list.appendChild(items[index]!);
 		});
 	}
 }
