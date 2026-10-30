@@ -189,7 +189,7 @@ export default class CheckboxReorderPlugin extends Plugin {
 						const doc = view.dom.ownerDocument;
 
 						// Create ghost container positioned at the source's old location
-						const ghost = doc.createElement('div');
+						const ghost = doc.body.createDiv();
 						ghost.setCssStyles({
 							position: 'fixed',
 							top: `${startY}px`,

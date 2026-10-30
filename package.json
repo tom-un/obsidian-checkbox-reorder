@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-checkbox-reorder",
-	"version": "1.1.0",
-	"description": "Obsidian plugin that automatically sorts checked items and moves TODO branches with nested sub-items.",
+	"version": "1.2.0",
+	"description": "Obsidian plugin that sweeps completed tasks to the bottom and moves nested TODO branches.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

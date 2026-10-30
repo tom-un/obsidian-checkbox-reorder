@@ -1,8 +1,10 @@
-# Auto Sort Checked Items
+# Task Sweep
 
-![Auto Sort Checked Items demo](example.gif)
+![Task Sweep demo](example.gif)
 
-An [Obsidian](https://obsidian.md) plugin that keeps completed tasks out of the way and makes nested TODO lists easier to organize. Check an item to move it below the remaining work, or use hotkeys to move an entire TODO branch with all of its sub-items.
+> Formerly **Auto Sort Checked Items**. The plugin ID remains unchanged, so existing installations update normally.
+
+An [Obsidian](https://obsidian.md) plugin that sweeps completed tasks to the bottom while keeping nested branches together. Check an item to move it below the remaining work, or use hotkeys to move an entire TODO branch with all of its sub-items.
 
 ## Features
 
@@ -18,8 +20,8 @@ An [Obsidian](https://obsidian.md) plugin that keeps completed tasks out of the 
 
 Obsidian's built-in **Move line up** and **Move line down** commands only move one line. This plugin adds:
 
-- **Auto Sort Checked Items: Move TODO item up with sub-items**
-- **Auto Sort Checked Items: Move TODO item down with sub-items**
+- **Task Sweep: Move TODO item up with sub-items**
+- **Task Sweep: Move TODO item down with sub-items**
 
 Assign hotkeys to these commands in **Settings → Hotkeys**. They are unassigned by default. Put the cursor on a checkbox item and the command will swap that item, including every indented line beneath it, with the adjacent checkbox item at the same indentation level.
 
@@ -32,7 +34,7 @@ Assign hotkeys to these commands in **Settings → Hotkeys**. They are unassigne
 1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/tom-un/obsidian-checkbox-reorder/releases)
 2. Create a folder called `auto-sort-checked-items` in your vault's `.obsidian/plugins/` directory
 3. Place both files inside it
-4. In Obsidian, go to **Settings → Community plugins** and enable **Auto Sort Checked Items**
+4. In Obsidian, go to **Settings → Community plugins** and enable **Task Sweep**
 
 ### From source
 
